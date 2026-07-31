@@ -20,14 +20,23 @@
 
     <plugins>
       <plugin>
-        <groupId>org.mortbay.jetty</groupId>
+        <!-- Modernized to Eclipse Jetty 9 to support Java 21 compilation -->
+        <groupId>org.eclipse.jetty</groupId>
         <artifactId>jetty-maven-plugin</artifactId>
+        <version>9.4.53.v20231009</version>
+        <configuration>
+          <supportedPackagings>
+            <supportedPackaging>war</supportedPackaging>
+          </supportedPackagings>
+          <webApp>
+            <contextPath>/</contextPath>
+          </webApp>
+        </configuration>
       </plugin>
     </plugins>
   </build>
 
   <dependencies>
-
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>servlet-api</artifactId>

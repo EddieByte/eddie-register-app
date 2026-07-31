@@ -1,115 +1,124 @@
 pipeline {
     agent { label 'Jenkins-Agent' }
+
     tools {
-        jdk 'Java17'
+        jdk 'Java21'
         maven 'Maven3'
     }
+
     environment {
-	    APP_NAME = "register-app-pipeline"
-            RELEASE = "1.0.0"
-            DOCKER_USER = "ashfaque9x"
-            DOCKER_PASS = 'dockerhub'
-            IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
-            IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
-	    JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
+        APP_NAME    = "eddie-register-app"
+        RELEASE     = "1.0.0"
+        IMAGE_NAME  = "eddiebyte/${APP_NAME}"
+        IMAGE_TAG   = "${RELEASE}-${BUILD_NUMBER}"
+        TRIVY_IMAGE = "aquasec/trivy:0.69.3"
     }
-    stages{
-        stage("Cleanup Workspace"){
-                steps {
-                cleanWs()
-                }
+
+    stages {
+        stage("Cleanup Workspace") {
+            steps { cleanWs() }
         }
 
-        stage("Checkout from SCM"){
-                steps {
-                    git branch: 'main', credentialsId: 'github', url: 'https://github.com/Ashfaque-9x/register-app'
-                }
+        stage("Checkout from SCM") {
+            steps {
+                git branch: 'main',
+                    credentialsId: 'github',
+                    url: 'https://github.com/EddieByte/eddie-register-app'
+            }
         }
 
-        stage("Build Application"){
+        stage("Build & Test") {
             steps {
                 sh "mvn clean package"
+                sh "mvn test"
             }
-
-       }
-
-       stage("Test Application"){
-           steps {
-                 sh "mvn test"
-           }
-       }
-
-       stage("SonarQube Analysis"){
-           steps {
-	           script {
-		        withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') { 
-                        sh "mvn sonar:sonar"
-		        }
-	           }	
-           }
-       }
-
-       stage("Quality Gate"){
-           steps {
-               script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'jenkins-sonarqube-token'
-                }	
-            }
-
         }
 
-        stage("Build & Push Docker Image") {
+        stage("SonarQube Analysis") {
             steps {
                 script {
-                    docker.withRegistry('',DOCKER_PASS) {
-                        docker_image = docker.build "${IMAGE_NAME}"
+                    withSonarQubeEnv('sonarqube-server') {
+                        sh "mvn sonar:sonar"
                     }
-
-                    docker.withRegistry('',DOCKER_PASS) {
-                        docker_image.push("${IMAGE_TAG}")
-                        docker_image.push('latest')
+                    timeout(time: 2, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
                     }
                 }
             }
+        }
 
-       }
+        stage("Docker Build") {
+            steps {
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+            }
+        }
 
-       stage("Trivy Scan") {
-           steps {
-               script {
-	            sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ashfaque9x/register-app-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table')
-               }
-           }
-       }
-
-       stage ('Cleanup Artifacts') {
-           steps {
-               script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker rmi ${IMAGE_NAME}:latest"
-               }
-          }
-       }
-
-       stage("Trigger CD Pipeline") {
+        stage("Trivy Scan") {
             steps {
                 script {
-                    sh "curl -v -k --user clouduser:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'ec2-13-232-128-192.ap-south-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token'"
+                    sh """
+                        docker run --rm \
+                            -e DOCKER_API_VERSION=1.44 \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            ${TRIVY_IMAGE} image \
+                            --severity HIGH,CRITICAL \
+                            --exit-code 0 \
+                            ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
                 }
             }
-       }
+        }
+
+        stage("Docker Login & Push") {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'DockerHub',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                            docker push ${IMAGE_NAME}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage("Update Manifests") {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github',
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_PASS'
+                    )]) {
+                        sh """
+                            rm -rf eddie-register-app-manifests
+                            git clone https://github.com/EddieByte/eddie-register-app-manifests.git
+                            cd eddie-register-app-manifests/overlays/dev
+                            kustomize edit set image ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}
+                            git config user.email "jenkins@eddiebyte.com"
+                            git config user.name "Jenkins CI"
+                            git add kustomization.yaml
+                            git commit -m "Update dev image to ${IMAGE_TAG} [skip ci]"
+                            git push https://\$GIT_USER:\$GIT_PASS@github.com/EddieByte/eddie-register-app-manifests.git main
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup Artifacts') {
+            steps {
+                script {
+                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+                    sh "docker rmi ${IMAGE_NAME}:latest || true"
+                }
+            }
+        }
     }
-
-    post {
-       failure {
-             emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
-                      subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Failed", 
-                      mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
-      }
-      success {
-            emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
-                     subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Successful", 
-                     mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
-      }      
-   }
 }
