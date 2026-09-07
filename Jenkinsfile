@@ -97,10 +97,22 @@ pipeline {
                         passwordVariable: 'GIT_PASS'
                     )]) {
                         sh """
+                            # Ensure kustomize is available
+                            if ! command -v kustomize &> /dev/null; then
+                                echo "kustomize not found globally. Installing local binary..."
+                                curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+                                KUSTOMIZE_CMD="./kustomize"
+                            else
+                                KUSTOMIZE_CMD="kustomize"
+                            fi
+
                             rm -rf eddie-register-app-manifests
                             git clone https://github.com/EddieByte/eddie-register-app-manifests.git
                             cd eddie-register-app-manifests/overlays/dev
-                            kustomize edit set image ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}
+                            
+                            # Execute kustomize via system path or local binary
+                            ../..\$/KUSTOMIZE_CMD edit set image ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}
+                            
                             git config user.email "jenkins@eddiebyte.com"
                             git config user.name "Jenkins CI"
                             git add kustomization.yaml
