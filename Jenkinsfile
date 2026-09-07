@@ -1,17 +1,33 @@
 pipeline {
     agent { label 'Jenkins-Agent' }
 
+    // Make inputs dynamic via Jenkins UI parameters
+    parameters {
+        string(name: 'APP_NAME', defaultValue: 'eddie-register-app', description: 'Application Name')
+        string(name: 'RELEASE_VERSION', defaultValue: '1.0.0', description: 'Base release version')
+        string(name: 'DOCKER_USER', defaultValue: 'eddiebyte', description: 'Docker Hub Namespace/Username')
+        string(name: 'GITHUB_USER', defaultValue: 'EddieByte', description: 'GitHub Username/Org')
+        string(name: 'TARGET_BRANCH', defaultValue: 'main', description: 'Branch to target for manifests')
+        
+        // Jenkins Credentials IDs
+        string(name: 'DOCKER_CRED_ID', defaultValue: 'DockerHub', description: 'Jenkins Credentials ID for Docker')
+        string(name: 'GIT_CRED_ID', defaultValue: 'github', description: 'Jenkins Credentials ID for Git')
+    }
+
     tools {
         jdk 'Java21'
         maven 'Maven3'
     }
 
     environment {
-        APP_NAME    = "eddie-register-app"
-        RELEASE     = "1.0.0"
-        IMAGE_NAME  = "eddiebyte/${APP_NAME}"
-        IMAGE_TAG   = "${RELEASE}-${BUILD_NUMBER}"
+        // Dynamically derived from job parameters and build run
+        IMAGE_NAME  = "${params.DOCKER_USER}/${params.APP_NAME}"
+        IMAGE_TAG   = "${params.RELEASE_VERSION}-${BUILD_NUMBER}"
         TRIVY_IMAGE = "aquasec/trivy:0.69.3"
+        
+        // Manifest Repo details derived dynamically
+        MANIFEST_REPO_NAME = "${params.APP_NAME}-manifests"
+        MANIFEST_REPO_URL  = "https://github.com/${params.GITHUB_USER}/${MANIFEST_REPO_NAME}.git"
     }
 
     stages {
@@ -21,9 +37,8 @@ pipeline {
 
         stage("Checkout from SCM") {
             steps {
-                git branch: 'main',
-                    credentialsId: 'github',
-                    url: 'https://github.com/EddieByte/eddie-register-app'
+                // Uses git plugin properties dynamically derived from job execution
+                checkout scm
             }
         }
 
@@ -73,12 +88,12 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'DockerHub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
+                        credentialsId: params.DOCKER_CRED_ID,
+                        usernameVariable: 'DH_USER',
+                        passwordVariable: 'DH_PASS'
                     )]) {
                         sh """
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            echo \$DH_PASS | docker login -u \$DH_USER --password-stdin
                             docker push ${IMAGE_NAME}:${IMAGE_TAG}
                             docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
                             docker push ${IMAGE_NAME}:latest
@@ -92,33 +107,34 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'github',
+                        credentialsId: params.GIT_CRED_ID,
                         usernameVariable: 'GIT_USER',
                         passwordVariable: 'GIT_PASS'
                     )]) {
-                        sh """
-                            # Ensure kustomize is available
+                        // Use single quotes for shell string to avoid Groovy escaping issues
+                        sh '''
+                            # Ensure kustomize is available on the agent
                             if ! command -v kustomize &> /dev/null; then
                                 echo "kustomize not found globally. Installing local binary..."
                                 curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-                                KUSTOMIZE_CMD="./kustomize"
-                            else
-                                KUSTOMIZE_CMD="kustomize"
+                                export PATH="$PATH:$(pwd)"
                             fi
 
-                            rm -rf eddie-register-app-manifests
-                            git clone https://github.com/EddieByte/eddie-register-app-manifests.git
-                            cd eddie-register-app-manifests/overlays/dev
-                            
-                            # Execute kustomize via system path or local binary
-                            ../..\$/KUSTOMIZE_CMD edit set image ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}
-                            
+                            rm -rf ${MANIFEST_REPO_NAME}
+                            git clone ${MANIFEST_REPO_URL}
+                            cd ${MANIFEST_REPO_NAME}/overlays/dev
+
+                            # Run kustomize dynamically
+                            kustomize edit set image ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}
+
                             git config user.email "jenkins@eddiebyte.com"
                             git config user.name "Jenkins CI"
                             git add kustomization.yaml
-                            git commit -m "Update dev image to ${IMAGE_TAG} [skip ci]"
-                            git push https://\$GIT_USER:\$GIT_PASS@github.com/EddieByte/eddie-register-app-manifests.git main
-                        """
+                            git commit -m "Update dev image to ${IMAGE_TAG} [skip ci]" || echo "No changes to commit"
+                            
+                            # Push using authenticated URL
+                            git push https://${GIT_USER}:${GIT_PASS}@github.com/${GITHUB_USER}/${MANIFEST_REPO_NAME}.git ${TARGET_BRANCH}
+                        '''
                     }
                 }
             }
