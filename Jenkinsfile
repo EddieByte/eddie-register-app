@@ -38,7 +38,7 @@ pipeline {
             steps {
                 script {
                     withSonarQubeEnv('sonarqube-server') {
-                        sh "mvn sonar:sonar"
+                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar"
                     }
                     timeout(time: 2, unit: 'MINUTES') {
                         waitForQualityGate abortPipeline: true
