@@ -1,5 +1,9 @@
 pipeline {
     agent { label 'Jenkins-Agent' }
+    
+    triggers {
+        githubPush()
+    }
 
     parameters {
         string(name: 'APP_NAME', defaultValue: 'eddie-register-app', description: 'Application Name')
