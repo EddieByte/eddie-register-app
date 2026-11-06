@@ -150,4 +150,33 @@ pipeline {
             }
         }
     }
+
+    // Slack notifications. slackSend never fails the build if Slack is unreachable
+    // or misconfigured; it only logs a warning. Requires the Slack plugin on Jenkins.
+    post {
+        success {
+            slackSend(
+                channel: '#ci-builds',
+                color: 'good',
+                message: ":white_check_mark: *${env.JOB_NAME}* #${env.BUILD_NUMBER} passed\n" +
+                         "Image `${env.IMAGE_NAME}:${env.IMAGE_TAG}` pushed and dev manifest updated. " +
+                         "ArgoCD will deploy it shortly.\n<${env.BUILD_URL}|Open build>"
+            )
+        }
+        failure {
+            slackSend(
+                channel: '#ci-builds',
+                color: 'danger',
+                message: ":x: *${env.JOB_NAME}* #${env.BUILD_NUMBER} failed. Nothing was deployed.\n" +
+                         "<${env.BUILD_URL}console|View console log>"
+            )
+        }
+        aborted {
+            slackSend(
+                channel: '#ci-builds',
+                color: 'warning',
+                message: ":double_vertical_bar: *${env.JOB_NAME}* #${env.BUILD_NUMBER} was aborted.\n<${env.BUILD_URL}|Open build>"
+            )
+        }
+    }
 }
