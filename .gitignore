@@ -1,0 +1,12 @@
+# Maven build output (rebuilt by "mvn clean package" in the pipeline)
+target/
+
+# IDE and OS files
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db

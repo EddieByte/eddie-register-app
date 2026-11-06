@@ -1,39 +1,63 @@
-# Register App
+# Eddie Register App
 
-A small Java Maven multi-module web application that builds a server module and a web layer packaged as a WAR.
+A small Java web application used as the workload for the
+[cicd-eks-pipeline](https://github.com/EddieByte/cicd-eks-pipeline) DevOps platform.
+The app is intentionally simple: the focus of the project is the pipeline and
+platform that build, scan, deploy and monitor it.
 
-## Build and Test Status
+## What it does
 
-The current workspace has been validated with Maven test execution:
+- **Home page** (`home.jsp`) with a call-to-action to create an account
+- **Registration form** (`register.jsp`) for name, mobile number, email and password
+- **`RegisterServlet`** (mapped to `/register`) handles the form POST and forwards to
+  the thank-you page
+- **Thank-you page** (`thankyou.jsp`) and **About page** (`about.jsp`)
 
-- `mvn test` completed successfully in the main project reactor.
-- Reactor summary reported `BUILD SUCCESS` for the server and webapp modules.
-- The server test suite executed with `Tests run: 2, Failures: 0, Errors: 0, Skipped: 0` in the source-layout reactor.
+Form data is not stored anywhere. There is no database.
 
-## Environment Requirements
+## Tech stack
 
-The project is designed around the following runtime expectations:
+| Layer | Technology |
+|---|---|
+| Language | Java 21 (compiled), running on JDK 17 in the container |
+| Web | JSP + Java Servlet (javax.servlet) |
+| Packaging | Maven multi-module build → `webapp.war` |
+| Runtime | Apache Tomcat 9 (`tomcat:9.0-jdk17` image), deployed as the root app |
 
-- JDK 17 runtime is installed for the Java IDE/runtime surface and can satisfy Java SE 17 execution environment discovery.
-- Maven runs on the host JDK discovered by the command line, which is currently Java 24.0.1 in this environment (`mvn -version` evidence).
-- The build compiler configuration is set to Java 21 (`maven.compiler.source` and `maven.compiler.target` are `21` in the root POM).
-- The web container image referenced in the Docker build uses Tomcat 9 with JDK 17 (`FROM tomcat:9.0-jdk17`).
-- Maven 3.9.x is the version used by the current workspace command-line runtime.
+## Project layout
 
-## Runtime & Tooling Notes
+```
+eddie-register-app/
+├── pom.xml          Parent POM (Java 21, plugin versions)
+├── webapp/          The web application: JSPs, CSS, RegisterServlet → webapp.war
+├── server/          Supporting Maven module (no application code yet)
+├── Dockerfile       Copies webapp.war into Tomcat as ROOT.war
+└── Jenkinsfile      CI pipeline (see below)
+```
 
-- Use Maven from the project root to run the build lifecycle and tests.
-- The IDE may report Java build path warnings if VS Code’s Java configuration has not refreshed after JDK installation.
-- The project uses Maven multi-module build semantics from the root POM.
+## Build and run locally
 
-## Troubleshooting
+```bash
+mvn clean package                         # produces webapp/target/webapp.war
+docker build -t eddie-register-app .
+docker run --rm -p 8080:8080 eddie-register-app
+```
 
-If you see a Java build-environment message such as `Build path specifies execution environment JavaSE-17`:
+Open http://localhost:8080.
 
-1. Confirm the Java 17 JDK is installed and visible to the system.
-2. Refresh the Java tooling from the VS Code command palette using `Java: Clean Java Language Server Workspace`.
-3. Reload the workspace if the Java extension reports stale classpath or JRE discovery details.
-4. Re-run `mvn test` from the repository root to confirm Maven remains the source of truth for compilation and test execution.
+## CI/CD pipeline
 
-When a JDK is installed manually, the Java extension may need a workspace settings refresh so it can discover the new runtime.
+Every push triggers the Jenkins pipeline in `Jenkinsfile`:
 
+1. **Build** with Maven (`mvn clean package`)
+2. **SonarQube analysis**: the pipeline stops if the quality gate fails
+3. **Docker build**
+4. **Trivy scan** for HIGH/CRITICAL vulnerabilities. This is *report-only*: findings
+   are printed in the build log but don't stop the build.
+5. **Push** the image to Docker Hub as `eddiebyte/eddie-register-app:<version>-<build>`
+6. **Update the manifest repo**: the new image tag is committed to
+   [eddie-register-app-manifests](https://github.com/EddieByte/eddie-register-app-manifests)
+   (`overlays/dev`), and ArgoCD deploys it to EKS
+7. **Slack**: the build result is posted to `#ci-builds`
+
+Build output (`target/`) is not committed. The pipeline always builds from source.
