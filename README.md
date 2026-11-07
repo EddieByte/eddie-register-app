@@ -19,10 +19,10 @@ Form data is not stored anywhere. There is no database.
 
 | Layer | Technology |
 |---|---|
-| Language | Java 21 (compiled), running on JDK 17 in the container |
+| Language | Java 21 (build and runtime) |
 | Web | JSP + Java Servlet (javax.servlet) |
 | Packaging | Maven multi-module build → `webapp.war` |
-| Runtime | Apache Tomcat 9 (`tomcat:9.0-jdk17` image), deployed as the root app |
+| Runtime | Apache Tomcat 9 (`tomcat:9.0-jdk21` image), deployed as the root app |
 
 ## Project layout
 
@@ -59,5 +59,9 @@ Every push triggers the Jenkins pipeline in `Jenkinsfile`:
    [eddie-register-app-manifests](https://github.com/EddieByte/eddie-register-app-manifests)
    (`overlays/dev`), and ArgoCD deploys it to EKS
 7. **Slack**: the build result is posted to `#ci-builds`
+
+A GitHub Actions **smoke test** (`.github/workflows/smoke-test.yml`) also runs on every
+push. It builds the Docker image, starts it, loads each page, submits the registration
+form, and checks that the submitted name is HTML-escaped.
 
 Build output (`target/`) is not committed. The pipeline always builds from source.
