@@ -31,7 +31,7 @@ pipeline {
         
         IMAGE_NAME         = "${params.DOCKER_USER}/${params.APP_NAME}"
         IMAGE_TAG          = "${params.RELEASE_VERSION}-${BUILD_NUMBER}"
-        TRIVY_IMAGE        = "aquasec/trivy:0.69.3"
+        TRIVY_IMAGE        = "aquasec/trivy:0.76.2"
         MANIFEST_REPO_NAME = "${params.APP_NAME}-manifests"
     }
 
