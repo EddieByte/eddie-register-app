@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@500&family=Noto+Serif+JP:wght@600&display=swap');
+/* Fonts. Each family is imported separately, so if one isn't available the others still load.
+   Google Sans is used for all text; Noto Serif JP only for the Japanese kanji. */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@600&display=swap');
 
 :root {
   --ink: #1A1F2B;
@@ -9,15 +14,19 @@
   --accent: #147D75;
   --accent-dark: #0F5850;
   --accent-bg: #E6F3F1;
+  --font: 'Google Sans', 'Google Sans Flex', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
+
+/* Buttons and form fields don't inherit the page font by default. */
+button, input, select, textarea { font-family: inherit; }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font);
   line-height: 1.6;
 }
 
@@ -31,7 +40,7 @@ body {
 }
 
 .nav .brand {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-weight: 600;
   font-size: 18px;
   color: var(--ink);
@@ -55,7 +64,7 @@ body {
 }
 
 .eyebrow {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -65,14 +74,14 @@ body {
 }
 
 h1 {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-size: 34px;
   font-weight: 600;
   margin: 0 0 12px;
 }
 
 h2 {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-size: 22px;
   font-weight: 600;
   margin: 0 0 12px;
@@ -123,7 +132,7 @@ p.lead {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font);
 }
 
 .card input:focus {
@@ -257,7 +266,7 @@ footer {
   border-radius: 8px;
   background: #FAFBFC;
   font-size: 15px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font);
   color: var(--ink);
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
@@ -333,7 +342,7 @@ footer {
 }
 
 .quote-romaji {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font);
   font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -342,7 +351,7 @@ footer {
 }
 
 .quote-en {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-size: clamp(22px, 3vw, 30px);
   font-weight: 600;
   margin: 0 0 16px;
@@ -379,7 +388,7 @@ footer {
 }
 
 .virtue .virtue-name {
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-size: 18px;
   font-weight: 600;
   color: var(--ink);
@@ -507,7 +516,7 @@ footer {
   border-radius: 50%;
   background: var(--accent-bg);
   color: var(--accent-dark);
-  font-family: 'Sora', sans-serif;
+  font-family: var(--font);
   font-weight: 600;
 }
 .member-name { color: var(--ink); font-weight: 600; }

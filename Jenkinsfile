@@ -7,7 +7,7 @@ pipeline {
 
     parameters {
         string(name: 'APP_NAME', defaultValue: 'eddie-register-app', description: 'Application Name')
-        string(name: 'RELEASE_VERSION', defaultValue: '1.0.0', description: 'Base release version')
+        string(name: 'RELEASE_VERSION', defaultValue: '1.1.0', description: 'Base release version (1.1.0 = accounts with login and RDS)')
         string(name: 'DOCKER_USER', defaultValue: 'eddiebyte', description: 'Docker Hub Namespace/Username')
         string(name: 'GITHUB_USER', defaultValue: 'EddieByte', description: 'GitHub Username/Org')
         string(name: 'TARGET_BRANCH', defaultValue: 'main', description: 'Branch to target for manifests')
@@ -30,7 +30,9 @@ pipeline {
         TARGET_BRANCH      = "${params.TARGET_BRANCH}"
         
         IMAGE_NAME         = "${params.DOCKER_USER}/${params.APP_NAME}"
-        IMAGE_TAG          = "${params.RELEASE_VERSION}-${BUILD_NUMBER}"
+        // IMAGE_TAG is set after checkout: <version>-<build>-<git commit>, e.g. 1.1.0-3-a1b2c3d.
+        // The commit makes every tag unique, even when a rebuilt Jenkins restarts its
+        // build numbers at 1, so a tag can never be overwritten with different code.
         TRIVY_IMAGE        = "aquasec/trivy:0.76.2"
         MANIFEST_REPO_NAME = "${params.APP_NAME}-manifests"
     }
@@ -41,7 +43,15 @@ pipeline {
         }
 
         stage("Checkout from SCM") {
-            steps { checkout scm }
+            steps {
+                checkout scm
+                script {
+                    def commit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${params.RELEASE_VERSION}-${env.BUILD_NUMBER}-${commit}"
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.IMAGE_TAG}"
+                    echo "Image tag for this build: ${env.IMAGE_TAG}"
+                }
+            }
         }
 
         stage("Build & Test") {
@@ -66,7 +76,7 @@ pipeline {
 
         stage("Docker Build") {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh "docker build -t ${IMAGE_NAME}:${env.IMAGE_TAG} ."
             }
         }
 
@@ -80,7 +90,7 @@ pipeline {
                             ${TRIVY_IMAGE} image \
                             --severity HIGH,CRITICAL \
                             --exit-code 0 \
-                            ${IMAGE_NAME}:${IMAGE_TAG}
+                            ${IMAGE_NAME}:${env.IMAGE_TAG}
                     """
                 }
             }
@@ -144,7 +154,7 @@ pipeline {
         stage('Cleanup Artifacts') {
             steps {
                 script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+                    sh "docker rmi ${IMAGE_NAME}:${env.IMAGE_TAG} || true"
                     sh "docker rmi ${IMAGE_NAME}:latest || true"
                 }
             }
