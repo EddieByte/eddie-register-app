@@ -2,10 +2,20 @@
 <%-- Japanese text is written as HTML character codes so it displays correctly
      no matter how the JSP file's encoding is detected. --%>
 <div class="page">
+<% if (request.getParameter("deleted") != null) { %>
+  <div class="alert alert-success" role="status">Your account has been deleted. Everything we stored about you is gone.</div>
+<% } else if (request.getParameter("loggedout") != null) { %>
+  <div class="alert alert-success" role="status">You've been logged out. See you soon.</div>
+<% } %>
   <p class="eyebrow">Welcome</p>
   <h1>A small app, a real pipeline</h1>
-  <p class="lead">This is a lightweight registration app used to exercise a fully automated CI/CD pipeline &mdash; Jenkins, SonarQube, Docker, and ArgoCD deploying to Kubernetes on EKS.</p>
-  <a class="btn" href="register.jsp">Create your account</a>
+  <p class="lead">This is a lightweight registration app used to exercise a fully automated CI/CD pipeline &mdash; Jenkins, SonarQube, Docker, and ArgoCD deploying to Kubernetes on EKS, with accounts stored in Amazon RDS.</p>
+  <% if (navUser == null) { %>
+  <a class="btn" href="<%= ctx %>/register">Create your account</a>
+  <a class="btn btn-secondary" href="<%= ctx %>/login">Log in</a>
+<% } else { %>
+  <a class="btn" href="<%= ctx %>/account">Go to my account</a>
+<% } %>
 </div>
 
 <section class="quote-band">

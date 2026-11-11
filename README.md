@@ -7,13 +7,25 @@ platform that build, scan, deploy and monitor it.
 
 ## What it does
 
-- **Home page** (`home.jsp`) with a call-to-action to create an account
-- **Registration form** (`register.jsp`) for name, mobile number, email and password
-- **`RegisterServlet`** (mapped to `/register`) handles the form POST and forwards to
-  the thank-you page
-- **Thank-you page** (`thankyou.jsp`) and **About page** (`about.jsp`)
+- **Register** (`/register`): creates a real account in PostgreSQL and logs you straight in
+- **Log in / Log out** (`/login`, logout button in the nav bar)
+- **My account** (`/account`): your profile (mobile number partly masked) and a **Delete account**
+  option that asks for your password first
+- **Community** (`/community`): member count and recent sign-ups, shown only as "Jane D."
+- **Health check** (`/health`): `200` when the database is reachable, `503` when it isn't
+- Home and About pages (these work even when the database is down)
 
-Form data is not stored anywhere. There is no database.
+### Security built in
+
+- Passwords stored only as salted **PBKDF2-HMAC-SHA256** hashes (310,000 iterations)
+- **CSRF tokens** on every form; logout and delete are POST-only
+- New session id on login (prevents session fixation); 30-minute idle timeout
+- Generic "invalid email or password" message, equal timing for unknown emails, and a
+  **lockout after 5 failed logins** for 15 minutes
+- Server-side validation of every field; all user input **HTML-escaped** on output (no XSS)
+- Parameterised SQL everywhere (no SQL injection)
+
+> Demo app served over plain HTTP: don't reuse a real password.
 
 ## Tech stack
 
@@ -21,6 +33,7 @@ Form data is not stored anywhere. There is no database.
 |---|---|
 | Language | Java 21 (build and runtime) |
 | Web | JSP + Java Servlet (javax.servlet) |
+| Database | PostgreSQL (Amazon RDS in AWS), via the PostgreSQL JDBC driver |
 | Packaging | Maven multi-module build → `webapp.war` |
 | Runtime | Apache Tomcat 9 (`tomcat:9.0-jdk21` image), deployed as the root app |
 
@@ -37,10 +50,23 @@ eddie-register-app/
 
 ## Build and run locally
 
+The app reads its database settings from environment variables:
+
+| Variable | Example |
+|---|---|
+| `DB_URL` | `jdbc:postgresql://localhost:5432/registerapp` |
+| `DB_USER` | `app` |
+| `DB_PASSWORD` | `secret` |
+
+The `users` table is created automatically on first use. Without `DB_URL`, the home and
+about pages still work and account pages show a "database not connected" message.
+
 ```bash
-mvn clean package                         # produces webapp/target/webapp.war
+mvn clean package                         # builds webapp/target/webapp.war and runs unit tests
 docker build -t eddie-register-app .
-docker run --rm -p 8080:8080 eddie-register-app
+docker run --rm -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/registerapp \
+  -e DB_USER=app -e DB_PASSWORD=secret eddie-register-app
 ```
 
 Open http://localhost:8080.
@@ -59,9 +85,5 @@ Every push triggers the Jenkins pipeline in `Jenkinsfile`:
    [eddie-register-app-manifests](https://github.com/EddieByte/eddie-register-app-manifests)
    (`overlays/dev`), and ArgoCD deploys it to EKS
 7. **Slack**: the build result is posted to `#ci-builds`
-
-A GitHub Actions **smoke test** (`.github/workflows/smoke-test.yml`) also runs on every
-push. It builds the Docker image, starts it, loads each page, submits the registration
-form, and checks that the submitted name is HTML-escaped.
 
 Build output (`target/`) is not committed. The pipeline always builds from source.

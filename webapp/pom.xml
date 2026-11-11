@@ -48,6 +48,21 @@
       <artifactId>jsp-api</artifactId>
       <scope>provided</scope>
     </dependency>
+
+    <!-- PostgreSQL JDBC driver (Amazon RDS) -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.7</version>
+    </dependency>
+
+    <!-- Unit tests -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 </project>
